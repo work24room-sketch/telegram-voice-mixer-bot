@@ -24,4 +24,4 @@ services:
         fromService:
           type: web
           name: voice-mixer-api
-          property: url
+          property: host # ИЗМЕНЕНИЕ ЗДЕСЬ: используем 'host' вместо 'url'
