@@ -12,6 +12,9 @@ GITHUB_MUSIC_URL = "https://raw.githubusercontent.com/work24room-sketch/telegram
 # --- Инициализация Flask ---
 app = Flask(__name__)
 
+# --- Инициализация Telegram бота ---
+bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
+
 # --- Эндпоинты Flask ---
 @app.route("/process_audio", methods=["POST"])
 def process_audio():
@@ -25,7 +28,6 @@ def process_audio():
         output_filename = f"mixed_{uuid.uuid4().hex}.mp3"
         output_path = os.path.join(os.getcwd(), output_filename)
 
-        # Вызываем функцию напрямую
         result_path = mix_voice_with_music(voice_file_path, output_path, GITHUB_MUSIC_URL)
         return jsonify({"processed_file": output_filename})
 
@@ -47,14 +49,18 @@ def download_file(filename):
 def index():
     return "Voice Mixer Bot is running!"
 
-# --- Инициализация Telegram бота ---
-bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
+# --- Обработчики Telegram ---
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    bot.reply_to(message, "🎵 Привет! Отправь мне голосовое сообщение, и я добавлю к нему фоновую музыку!")
 
 @bot.message_handler(content_types=["voice"])
 def handle_voice(message):
     try:
+        print("🔊 Получено голосовое сообщение!")  # Логирование
         bot.send_chat_action(message.chat.id, "upload_audio")
 
+        # Скачиваем голосовое сообщение
         file_info = bot.get_file(message.voice.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
 
@@ -62,39 +68,68 @@ def handle_voice(message):
         with open(voice_filename, "wb") as f:
             f.write(downloaded_file)
 
-        # --- Обработка без HTTP ---
+        # Обрабатываем аудио напрямую (без HTTP запросов)
         output_filename = f"mixed_{uuid.uuid4().hex}.mp3"
-        mix_voice_with_music(voice_filename, output_filename, GITHUB_MUSIC_URL)
+        output_path = os.path.join(os.getcwd(), output_filename)
+        
+        print("🎵 Начинаем обработку аудио...")
+        mix_voice_with_music(voice_filename, output_path, GITHUB_MUSIC_URL)
+        print("✅ Аудио обработано!")
 
-        # --- Отправка пользователю ---
-        with open(output_filename, "rb") as audio_file:
-            bot.send_audio(message.chat.id, audio_file, title="Ваш микс!")
+        # Отправляем результат пользователю
+        with open(output_path, "rb") as audio_file:
+            bot.send_audio(message.chat.id, audio_file, title="Ваш микс!", performer="Voice Mixer Bot")
 
-        # --- Очистка ---
+        # Очистка временных файлов
         cleanup(voice_filename)
-        cleanup(output_filename)
+        cleanup(output_path)
+        print("🗑️ Временные файлы удалены")
 
     except Exception as e:
-        bot.reply_to(message, f"Произошла ошибка: {e}")
+        error_msg = f"❌ Произошла ошибка: {str(e)}"
+        print(error_msg)
+        bot.reply_to(message, error_msg)
+
+@bot.message_handler(func=lambda message: True)
+def handle_text(message):
+    bot.reply_to(message, "Отправьте мне голосовое сообщение 🎤")
 
 def cleanup(filename):
     try:
         if os.path.exists(filename):
             os.remove(filename)
-    except:
-        pass
+    except Exception as e:
+        print(f"⚠️ Ошибка при удалении файла {filename}: {e}")
 
 # --- Запуск бота в отдельном потоке ---
 def run_bot():
-    print("Запускаем Telegram-бота...")
-    bot.polling(none_stop=True)
+    print("🤖 Запускаем Telegram-бота...")
+    try:
+        bot.remove_webhook()  # Важно: отключаем вебхуки если они были
+        print("✅ Бот запущен и слушает сообщения...")
+        bot.polling(none_stop=True, timeout=60)
+    except Exception as e:
+        print(f"❌ Ошибка в работе бота: {e}")
+
+# --- Инициализация приложения ---
+def create_app():
+    # Запускаем бота только при непосредственном запуске (не в Gunicorn)
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        bot_thread = threading.Thread(target=run_bot)
+        bot_thread.daemon = True
+        bot_thread.start()
+        print("🚀 Приложение инициализировано!")
+    
+    return app
+
+# --- Точка входа для Gunicorn ---
+application = create_app()
 
 if __name__ == "__main__":
-    # Бот в отдельном потоке
+    # Для локального запуска
     bot_thread = threading.Thread(target=run_bot)
     bot_thread.daemon = True
     bot_thread.start()
-
-    # Flask-сервер (Gunicorn под Render использует этот WSGI)
-    print("Запускаем Flask-сервер...")
+    
+    print("🌐 Запускаем Flask-сервер...")
     app.run(host="0.0.0.0", port=5000, debug=False)
