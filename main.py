@@ -1,3 +1,4 @@
+print(">>> MAIN.PY ЗАГРУЖЕН <<<")
 import threading
 from flask import Flask, request, jsonify, send_file
 import telebot
