@@ -8,7 +8,7 @@ from audio_processor import mix_voice_with_music
 
 # --- Конфигурация ---
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-GITHUB_MUSIC_URL = "GITHUB_MUSIC_URL = "https://raw.githubusercontent.com/work24room-sketch/telegram-voice-mixer-bot/main/background_music.mp3"  # ЗАМЕНИТЕ!
+GITHUB_MUSIC_URL = "https://raw.githubusercontent.com/work24room-sketch/telegram-voice-mixer-bot/main/background_music.mp3"  # ЗАМЕНИТЕ!
 
 # --- Инициализация Flask ---
 app = Flask(__name__)
