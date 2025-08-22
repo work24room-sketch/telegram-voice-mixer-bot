@@ -5,9 +5,10 @@ import uuid
 from time import sleep
 
 # Конфигурация
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')  # Создадим переменную в Render
-RENDER_SERVICE_URL = os.environ.get('RENDER_SERVICE_URL')  # URL вашего Flask-сервиса, например https://your-flask-service.onrender.com
-
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+RENDER_SERVICE_HOST = os.environ.get('RENDER_SERVICE_URL')  # Получаем host из переменной
+# Теперь сами собираем полный URL, добавляя https://
+RENDER_SERVICE_URL = f"https://{RENDER_SERVICE_HOST}"
 # Инициализируем бота
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
@@ -74,4 +75,5 @@ def cleanup(filename):
 
 # Запускаем бота
 if __name__ == '__main__':
+
     bot.polling(none_stop=True)
