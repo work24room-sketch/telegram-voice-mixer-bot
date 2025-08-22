@@ -1,6 +1,7 @@
 telebot==0.0.5
 Flask==2.3.2
 requests==2.31.0
-pydub==0.25.1
-ffmpeg-python==0.2.0
 gunicorn==21.2.0
+# Убираем проблемные библиотеки
+# pydub==0.25.1
+# ffmpeg-python==0.2.0
