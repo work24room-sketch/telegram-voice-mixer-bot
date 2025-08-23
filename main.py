@@ -12,6 +12,25 @@ GITHUB_MUSIC_URL = "https://raw.githubusercontent.com/work24room-sketch/telegram
 # --- Инициализация Flask ---
 app = Flask(__name__)
 
+import time
+from flask import jsonify
+
+# Добавьте этот эндпоинт вместе с другими Flask-роутами
+@app.route("/health")
+def health_check():
+    """Специальный эндпоинт для проверки работоспособности UptimeRobot"""
+    return jsonify({
+        "status": "healthy",
+        "service": "voice-mixer-api",
+        "timestamp": time.time(),
+        "version": "1.0"
+    })
+
+@app.route("/")
+def index():
+    """Главная страница тоже подойдет для пинга"""
+    return "🎵 Voice Mixer Bot is running! Use /health for status check."
+
 # --- Инициализация Telegram бота ---
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
