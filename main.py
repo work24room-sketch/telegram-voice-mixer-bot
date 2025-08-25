@@ -144,11 +144,11 @@ def create_app():
 # --- Точка входа для Gunicorn ---
 application = create_app()
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     # Для локального запуска
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.daemon = True
-    bot_thread.start()
+   # bot_thread = threading.Thread(target=run_bot)
+   # bot_thread.daemon = True
+   # bot_thread.start()
     
     print("🌐 Запускаем Flask-сервер...")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+   # app.run(host="0.0.0.0", port=5000, debug=False)
