@@ -1,6 +1,6 @@
 import threading
 from flask import Flask, request, jsonify, send_file
-import telebot
+# import telebot
 import os
 import uuid
 from audio_processor import mix_voice_with_music
@@ -32,7 +32,7 @@ def index():
     return "🎵 Voice Mixer Bot is running! Use /health for status check."
 
 # --- Инициализация Telegram бота ---
-bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
+# bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 # --- Эндпоинты Flask ---
 @app.route("/process_audio", methods=["POST"])
@@ -126,7 +126,7 @@ def run_bot():
     try:
         bot.remove_webhook()  # Важно: отключаем вебхуки если они были
         print("✅ Бот запущен и слушает сообщения...")
-        bot.polling(none_stop=True, timeout=60)
+       #  bot.polling(none_stop=True, timeout=60)
     except Exception as e:
         print(f"❌ Ошибка в работе бота: {e}")
 
