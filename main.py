@@ -1,18 +1,17 @@
-import threading
-from flask import Flask, request, jsonify, send_file
 import os
 import uuid
 import time
+from flask import Flask, request, jsonify, send_file
 from audio_processor import mix_voice_with_music
 
 # --- Конфигурация ---
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 GITHUB_MUSIC_URL = "https://raw.githubusercontent.com/work24room-sketch/telegram-voice-mixer-bot/main/background_music.mp3"
 
 # --- Инициализация Flask ---
 app = Flask(__name__)
 
 # ==================== ЭНДПОИНТЫ ====================
+
 @app.route("/health")
 def health_check():
     """Эндпоинт для проверки работоспособности"""
@@ -33,23 +32,43 @@ def process_audio():
     """Основной эндпоинт для обработки аудио"""
     try:
         data = request.get_json()
-        voice_file_id = data.get("voice_file_id")
-        chat_id = data.get("chat_id")
-        
-        if not voice_file_id or not chat_id:
-            return jsonify({"status": "error", "message": "Missing required parameters"}), 400
+        voice_file_path = data.get("voice_file_path")  # Локальный путь или URL .ogg
 
-        # Здесь будет ваш код обработки аудио
-        # Пока возвращаем заглушку для теста
+        if not voice_file_path:
+            return jsonify({"status": "error", "message": "Missing voice_file_path"}), 400
+
+        # Создаем уникальное имя файла для микса
+        output_filename = f"mixed_{uuid.uuid4().hex}.mp3"
+        output_path = os.path.join(os.getcwd(), output_filename)
+
+        # Обработка аудио
+        mix_voice_with_music(voice_file_path, output_path, GITHUB_MUSIC_URL)
+
+        # Возвращаем имя файла (Salebot потом сможет скачать)
         return jsonify({
-            "status": "success", 
-            "message": "Audio processing endpoint ready",
-            "voice_file_id": voice_file_id,
-            "chat_id": chat_id
+            "status": "success",
+            "processed_file": output_filename
         })
-        
+
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/download/<filename>", methods=["GET"])
+def download_file(filename):
+    """Скачивание готового файла"""
+    file_path = os.path.join(os.getcwd(), filename)
+    if os.path.exists(file_path):
+        return send_file(file_path, as_attachment=True)
+    else:
+        return jsonify({"status": "error", "message": "File not found"}), 404
+
+def cleanup(filename):
+    """Удаление временных файлов после обработки"""
+    try:
+        if os.path.exists(filename):
+            os.remove(filename)
+    except Exception as e:
+        print(f"⚠️ Ошибка при удалении файла {filename}: {e}")
 
 # ==================== ЗАПУСК СЕРВЕРА ====================
 if __name__ == "__main__":
