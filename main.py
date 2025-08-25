@@ -1,6 +1,5 @@
 import threading
 from flask import Flask, request, jsonify, send_file
-# import telebot
 import os
 import uuid
 from audio_processor import mix_voice_with_music
@@ -30,9 +29,6 @@ def health_check():
 def index():
     """Главная страница тоже подойдет для пинга"""
     return "🎵 Voice Mixer Bot is running! Use /health for status check."
-
-# --- Инициализация Telegram бота ---
-# bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 # --- Эндпоинты Flask ---
 @app.route("/process_audio", methods=["POST"])
@@ -126,7 +122,6 @@ def run_bot():
     try:
         bot.remove_webhook()  # Важно: отключаем вебхуки если они были
         print("✅ Бот запущен и слушает сообщения...")
-       #  bot.polling(none_stop=True, timeout=60)
     except Exception as e:
         print(f"❌ Ошибка в работе бота: {e}")
 
@@ -143,12 +138,5 @@ def create_app():
 
 # --- Точка входа для Gunicorn ---
 application = create_app()
-
-# if __name__ == "__main__":
-    # Для локального запуска
-   # bot_thread = threading.Thread(target=run_bot)
-   # bot_thread.daemon = True
-   # bot_thread.start()
-    
+   
     print("🌐 Запускаем Flask-сервер...")
-   # app.run(host="0.0.0.0", port=5000, debug=False)
