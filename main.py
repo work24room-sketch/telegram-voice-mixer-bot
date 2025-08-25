@@ -32,6 +32,7 @@ def process_audio():
         print(f"📋 Content-Type: {request.content_type}")
         data = request.get_json(force=True, silent=True) or request.form.to_dict()
         print(f"📦 Received data: {data}")
+        return jsonify({"status": "ok"})
 
         voice_file_url = data.get("voice_file_url")
         chat_id = data.get("chat_id")
