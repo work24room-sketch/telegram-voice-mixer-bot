@@ -14,6 +14,13 @@ app = Flask(__name__)
 
 # ==================== ЭНДПОИНТЫ ====================
 
+@app.route("/test", methods=["GET", "POST"])
+def test_endpoint():
+    print("✅ Тестовый запрос получен!")
+    print("Headers:", dict(request.headers))
+    print("Data:", request.get_json())
+    return jsonify({"status": "test_ok", "message": "Request received"})
+
 @app.route("/health")
 def health_check():
     """Эндпоинт для проверки работоспособности"""
