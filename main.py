@@ -53,6 +53,10 @@ def process_audio():
                 "attachments_json": ""
             }), 400
 
+        except Exception as e:
+        print("❌ Error:", str(e))
+        return jsonify({"status": "error", "message": str(e)}), 500
+
         # 1. Скачиваем голосовое сообщение по URL
         voice_response = requests.get(voice_file_url)
         voice_response.raise_for_status()  # Проверяем ошибки HTTP
