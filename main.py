@@ -1,12 +1,12 @@
 import os
 import uuid
 import time
-import requests  # ← ДОБАВИТЬ ИМПОРТ
+import requests
 from flask import Flask, request, jsonify, send_file
 from audio_processor import mix_voice_with_music
 
 # --- Конфигурация ---
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')  # ← ДОБАВИТЬ ТОКЕН
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 GITHUB_MUSIC_URL = "https://raw.githubusercontent.com/work24room-sketch/telegram-voice-mixer-bot/main/background_music.mp3"
 
 # --- Инициализация Flask ---
@@ -41,9 +41,9 @@ def process_audio():
     """Основной эндпоинт для обработки аудио"""
     try:
         data = request.get_json()
-        voice_file_url = data.get("voice_file_url")  # ← URL из #{attachment_url}
+        voice_file_url = data.get("voice_file_url")
         chat_id = data.get("chat_id")
-        attachments_json = data.get("attachments_json")  # ← JSON из #{attachments}
+        attachments_json = data.get("attachments_json")
         
         if not voice_file_url:
             return jsonify({
@@ -53,13 +53,9 @@ def process_audio():
                 "attachments_json": ""
             }), 400
 
-        except Exception as e:
-        print("❌ Error:", str(e))
-        return jsonify({"status": "error", "message": str(e)}), 500
-
         # 1. Скачиваем голосовое сообщение по URL
         voice_response = requests.get(voice_file_url)
-        voice_response.raise_for_status()  # Проверяем ошибки HTTP
+        voice_response.raise_for_status()
 
         # 2. Сохраняем временный файл
         voice_filename = f"voice_{uuid.uuid4().hex}.ogg"
@@ -94,11 +90,12 @@ def process_audio():
             "status": "success",
             "ready_file_id": ready_file_id,
             "message": "Audio processed successfully",
-            "voice_file_url": voice_file_url,  # ← возвращаем обратно
-            "attachments_json": attachments_json  # ← возвращаем обратно
+            "voice_file_url": voice_file_url,
+            "attachments_json": attachments_json
         })
 
     except Exception as e:
+        print("❌ Error:", str(e))
         # Очистка в случае ошибки
         if 'voice_filename' in locals() and os.path.exists(voice_filename):
             cleanup(voice_filename)
@@ -114,7 +111,7 @@ def process_audio():
 
 @app.route("/download/<filename>", methods=["GET"])
 def download_file(filename):
-    """Скачивание готового файла (резервный вариант)"""
+    """Скачивание готового файла"""
     file_path = os.path.join(os.getcwd(), filename)
     if os.path.exists(file_path):
         return send_file(file_path, as_attachment=True)
