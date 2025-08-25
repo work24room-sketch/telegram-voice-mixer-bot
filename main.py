@@ -40,18 +40,23 @@ def index():
 def process_audio():
     """Основной эндпоинт для обработки аудио"""
     try:
-        data = request.get_json()
+        # Принудительно пытаемся получить JSON, независимо от Content-Type
+        if request.is_json:
+            data = request.get_json()
+        else:
+            # Если Content-Type не application/json, пробуем распарсить как JSON
+            data = request.get_json(force=True, silent=True)
+            if data is None:
+                # Пробуем получить данные из form-data
+                data = request.form.to_dict()
+                if not data:
+                    return jsonify({
+                        "status": "error", 
+                        "message": "No JSON data received"
+                    }), 400
+
         voice_file_url = data.get("voice_file_url")
         chat_id = data.get("chat_id")
-        attachments_json = data.get("attachments_json")
-        
-        if not voice_file_url:
-            return jsonify({
-                "status": "error", 
-                "message": "Missing voice_file_url",
-                "voice_file_url": "",
-                "attachments_json": ""
-            }), 400
 
         # 1. Скачиваем голосовое сообщение по URL
         voice_response = requests.get(voice_file_url)
