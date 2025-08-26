@@ -27,7 +27,7 @@ def handler(event, context):
         }
 
     # Отправляем на твой тестовый сервер (замени URL на свой)
-    webhook_url = "https://your-render-test-service.onrender.com/webhook"
+    webhook_url = "https://voice-mixer-bot.onrender.com/webhook"
     payload = {"file_url": file_url}
 
     try:
