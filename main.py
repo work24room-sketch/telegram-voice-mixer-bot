@@ -17,15 +17,11 @@ def process_audio():
         if not voice_url:
             return jsonify({"error": "voice_url is required"}), 400
 
-        # тут твоя логика обработки файла, например:
+        # твоя логика обработки
         mix_result = f"Обработан файл: {voice_url}, клиент: {client_id}, имя: {name}"
 
-        return jsonify({
-            "status": "ok",
-            "client_id": client_id,
-            "name": name,
-            "mix_result": mix_result
-        }), 200
+        # ⚡️ важно: SaleBot ожидает mix_result именно на верхнем уровне JSON
+        return jsonify({"mix_result": mix_result}), 200
 
     except Exception as e:
         print("❌ Ошибка:", str(e))
