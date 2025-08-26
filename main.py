@@ -152,7 +152,8 @@ def download_file(filename):
         file_path = os.path.join(os.getcwd(), filename)
         if os.path.exists(file_path):
             logger.info(f"📥 Serving file: {filename}")
-            return send_file(file_path, as_attachment=True, as_attachment_filename=filename)
+            # УБИРАЕМ as_attachment_filename - это устаревший параметр
+            return send_file(file_path, as_attachment=True)
         else:
             logger.error(f"❌ File not found: {filename}")
             return jsonify({"error": "File not found"}), 404
