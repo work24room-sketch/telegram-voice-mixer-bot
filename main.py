@@ -3,7 +3,7 @@ def process_audio():
     try:
         data = request.get_json()
         voice_url = data.get("voice_url")  # ← Прямая ссылка на файл
-        chat_id = data.get("chat_id")
+        client_id = data.get("client_id")
         
         print(f"🎯 Received voice_url: {voice_url}")
         
@@ -37,7 +37,7 @@ def process_audio():
             files = {'audio': audio_file}
             send_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendAudio"
             send_data = {
-                'chat_id': chat_id,
+                'client_id': client_id,
                 'title': '🎵 Ваш микс!',
                 'caption': 'Готовое аудио с фоновой музыкой'
             }
