@@ -12,6 +12,10 @@ GITHUB_MUSIC_URL = "https://raw.githubusercontent.com/work24room-sketch/telegram
 # --- Flask ---
 app = Flask(__name__)
 
+# Папка для готовых файлов
+DOWNLOAD_DIR = "downloads"
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
 # ==================== ЭНДПОИНТЫ ====================
 
 @app.route("/health")
@@ -26,56 +30,71 @@ def health_check():
 def index():
     return "🎵 Voice Mixer Bot API is running!"
 
+
 @app.route("/process_audio", methods=["POST"])
 def process_audio():
     try:
-        print(f"📋 Content-Type: {request.content_type}")
-        data = request.get_json(force=True, silent=True) or request.form.to_dict()
-        print(f"📦 Received data: {data}")
-        return jsonify({"status": "ok"})
+        data = request.json
+        print("📋 Content-Type:", request.content_type)
+        print("📦 Received data:", data)
 
         voice_file_url = data.get("voice_file_url")
+        voice_file_id = data.get("voice_file_id")
         chat_id = data.get("chat_id")
-        attachments_json = data.get("attachments_json")
 
-        if not voice_file_url or not voice_file_url.startswith(("http://", "https://")):
-            return jsonify({
-                "status": "error",
-                "message": f"Invalid or missing voice_file_url: {voice_file_url}",
-                "voice_file_url": str(voice_file_url),
-                "attachments_json": str(attachments_json)
-            }), 400
+        if not (voice_file_url or voice_file_id) or not chat_id:
+            return jsonify({"status": "error", "message": "Missing voice_file or chat_id"}), 400
 
         # --- Скачивание файла ---
-        print(f"📥 Downloading from: {voice_file_url}")
-        voice_response = requests.get(voice_file_url)
-        voice_response.raise_for_status()
+        input_filename = f"voice_{uuid.uuid4().hex}.ogg"
 
-        voice_filename = f"voice_{uuid.uuid4().hex}.ogg"
-        with open(voice_filename, "wb") as f:
-            f.write(voice_response.content)
+        if voice_file_url:
+            # Прямой URL
+            print(f"📥 Downloading from URL: {voice_file_url}")
+            resp = requests.get(voice_file_url)
+            resp.raise_for_status()
+            with open(input_filename, "wb") as f:
+                f.write(resp.content)
+
+        elif voice_file_id:
+            # Получаем file_path через Telegram API
+            print(f"📥 Downloading from Telegram by file_id: {voice_file_id}")
+            file_info_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getFile"
+            r = requests.post(file_info_url, json={"file_id": voice_file_id})
+            r.raise_for_status()
+            file_path = r.json()["result"]["file_path"]
+
+            file_download_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_path}"
+            print(f"📥 Resolved Telegram file URL: {file_download_url}")
+
+            resp = requests.get(file_download_url)
+            resp.raise_for_status()
+            with open(input_filename, "wb") as f:
+                f.write(resp.content)
 
         # --- Микс ---
         output_filename = f"mixed_{uuid.uuid4().hex}.mp3"
-        mix_voice_with_music(voice_filename, output_filename, GITHUB_MUSIC_URL)
+        output_path = os.path.join(DOWNLOAD_DIR, output_filename)
 
-        # --- Отправка в Telegram ---
-        with open(output_filename, "rb") as audio_file:
-            files = {"audio": audio_file}
-            send_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendAudio"
-            send_data = {"chat_id": chat_id, "title": "🎵 Ваш микс!"}
-            send_response = requests.post(send_url, data=send_data, files=files)
-            send_response.raise_for_status()
+        mix_voice_with_music(input_filename, output_path, GITHUB_MUSIC_URL)
 
-        ready_file_id = send_response.json()["result"]["audio"]["file_id"]
+        # --- Возвращаем ссылку ---
+        mix_result_url = f"https://voice-mixer-bot.onrender.com/download/{output_filename}"
 
-        # --- Ответ ---
         return jsonify({
             "status": "success",
-            "ready_file_id": ready_file_id,
-            "voice_file_url": voice_file_url
-        })
+            "mix_result": mix_result_url
+        }), 200
 
     except Exception as e:
-        print("❌ Error:", str(e))
+        print("❌ Error in /process_audio:", str(e))
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# Эндпоинт для скачивания готовых файлов
+@app.route("/download/<filename>")
+def download_file(filename):
+    filepath = os.path.join(DOWNLOAD_DIR, filename)
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    return jsonify({"status": "error", "message": "File not found"}), 404
