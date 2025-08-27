@@ -166,19 +166,19 @@ def generate_for_salebot():
 
 # --- Инициализация приложения ---
 def create_app():
-    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
-        bot_thread = threading.Thread(target=run_bot)
-        bot_thread.daemon = True
-        bot_thread.start()
-        print("🚀 Приложение инициализировано!")
+    #if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+       # bot_thread = threading.Thread(target=run_bot)
+       # bot_thread.daemon = True
+       # bot_thread.start()
+       # print("🚀 Приложение инициализировано!")
     return app
 
 # --- Точка входа для Gunicorn ---
 application = create_app()
 
 if __name__ == "__main__":
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.daemon = True
-    bot_thread.start()
-    print("🌐 Запускаем Flask-сервер...")
+    #bot_thread = threading.Thread(target=run_bot)
+    #bot_thread.daemon = True
+    #bot_thread.start()
+    #print("🌐 Запускаем Flask-сервер...")
     app.run(host="0.0.0.0", port=5000, debug=False)
