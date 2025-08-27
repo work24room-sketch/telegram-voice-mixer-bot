@@ -98,14 +98,13 @@ def process_audio():
         cleanup(voice_filename)
 
         response_data = {
-            "status": "success",
-            "message": "Audio processed successfully",
-            "download_url": download_url,
-            "file_name": output_filename,
-            "client_id": client_id,
-            "name": name,
-            "processed_at": time.time()
-        }
+    "status": "success",
+    "mix_url": download_url,
+    "client_id": client_id,
+    "message": "Audio processed successfully"
+}
+        
+return jsonify(response_data)
 
         # === Запись в Google Sheets ===
         append_to_google_sheet([
