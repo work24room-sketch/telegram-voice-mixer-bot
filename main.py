@@ -90,11 +90,14 @@ def index():
     return "🎵 Voice Mixer Bot is running! Use /health for status check."
 
 @app.route("/webhook", methods=["POST"])
-def telegram_webhook():
-    json_str = request.get_data().decode("utf-8")
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
-    return "OK", 200
+def webhook():
+    if request.headers.get("content-type") == "application/json":
+        json_str = request.get_data().decode("utf-8")
+        update = telebot.types.Update.de_json(json_str)
+        bot.process_new_updates([update])
+        return "", 200
+    else:
+        return "Invalid request", 403
 
 @app.route("/process_audio", methods=["POST"])
 def process_audio():
