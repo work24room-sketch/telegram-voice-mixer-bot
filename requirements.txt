@@ -2,13 +2,9 @@ pyTelegramBotAPI==4.13.0
 Flask==2.3.2
 requests==2.31.0
 gunicorn==21.2.0
-noisereduce==0.4.0
-soundfile==0.12.1
-scipy==1.11.0
-librosa==0.10.1
-ffmpeg-python==0.2.0
 # Убираем проблемные библиотеки
 # pydub==0.25.1
 # ffmpeg-python==0.2.0
+
 
 
