@@ -23,39 +23,31 @@ def send_welcome(message):
 
 @bot.message_handler(content_types=["voice"])
 def handle_voice(message):
+    # --- ПЕРЕНАПРАВЛЕНИЕ В SALEBOT ---
+    bot.send_chat_action(message.chat.id, "typing")
+    
     try:
-        print("🔊 Получено голосовое сообщение!")
-        bot.send_chat_action(message.chat.id, "upload_audio")
-
-        # Скачиваем голосовое сообщение
+        # Получаем информацию о файле для передачи в Salebot
         file_info = bot.get_file(message.voice.file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-
-        voice_filename = f"voice_{uuid.uuid4().hex}.ogg"
-        with open(voice_filename, "wb") as f:
-            f.write(downloaded_file)
-
-        # Обрабатываем аудио напрямую
-        output_filename = f"mixed_{uuid.uuid4().hex}.mp3"
-        output_path = os.path.join(os.getcwd(), output_filename)
+        file_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_info.file_path}"
         
-        print("🎵 Начинаем обработку аудио...")
-        mix_voice_with_music(voice_filename, output_path, GITHUB_MUSIC_URL)
-        print("✅ Аудио обработано!")
-
-        # Отправляем результат пользователю
-        with open(output_path, "rb") as audio_file:
-            bot.send_audio(message.chat.id, audio_file, title="Ваш микс!", performer="Voice Mixer Bot")
-
-        # Очистка временных файлов
-        cleanup(voice_filename)
-        cleanup(output_path)
-        print("🗑️ Временные файлы удалены")
-
+        # Формируем сообщение о перенаправлении
+        redirect_text = (
+            "🎵 Спасибо за голосовое сообщение! \n\n"
+            "Для обработки и микширования с музыкой, пожалуйста, "
+            "воспользуйтесь нашим основным чат-ботом. \n\n"
+            "Перейдите в @YourSaleBotName для продолжения работы 😊"
+        )
+        
+        bot.reply_to(message, redirect_text)
+        
     except Exception as e:
-        error_msg = f"❌ Произошла ошибка: {str(e)}"
-        print(error_msg)
-        bot.reply_to(message, error_msg)
+        print(f"⚠️ Ошибка перенаправления: {e}")
+        bot.reply_to(message, "❌ Произошла ошибка при обработке запроса")
+    
+    # ПРЕРЫВАЕМ дальнейшую обработку голосового сообщения
+    return
+    # --- КОНЕЦ ПЕРЕНАПРАВЛЕНИЯ ---
 
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
