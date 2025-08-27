@@ -77,7 +77,7 @@ def send_welcome(message):
 def handle_voice(message):
     try:
         print("🔊 Получено голосовое сообщение!")  # Логирование
-        bot.send_chat_action(message.chat.id, "upload_audio")
+        bot.send_chat_action(message.client.id, "upload_audio")
 
         # Скачиваем голосовое сообщение
         file_info = bot.get_file(message.voice.file_id)
