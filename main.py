@@ -147,15 +147,24 @@ def process_audio():
 
 @app.route("/download/<filename>", methods=["GET"])
 def download_file(filename):
-    """Скачивание готового файла"""
     try:
-        file_path = os.path.join(os.getcwd(), filename)
-        if os.path.exists(file_path):
-            logger.info(f"📥 Serving file: {filename}")
-            return send_file(file_path, as_attachment=True, as_attachment_filename=filename)
-        else:
-            logger.error(f"❌ File not found: {filename}")
-            return jsonify({"error": "File not found"}), 404
+        # Проверяем безопасность пути
+        safe_filename = os.path.basename(filename)
+        file_path = os.path.join(os.getcwd(), safe_filename)
+        
+        if not os.path.exists(file_path) or '..' in filename or '/' in filename:
+            return jsonify({"status": "error", "message": "File not found"}), 404
+        
+        # ИСПРАВЛЕННЫЙ ВЫЗОВ - убрали as_attachment_filename
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=f"voice_mix_{safe_filename}"
+        )
+    
+    except Exception as e:
+        logging.error(f"❌ Download error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 404
     except Exception as e:
         logger.error(f"❌ Download error: {str(e)}")
         return jsonify({"error": str(e)}), 500
