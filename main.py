@@ -2,6 +2,9 @@ import requests
 import os
 from pydub import AudioSegment
 
+import sys
+print(">>> Python version:", sys.version, flush=True)
+
 def mix_voice_with_music(voice_path, output_path, music_url):
     """
     Накладывает голосовое сообщение на фоновую музыку.
