@@ -102,18 +102,75 @@ def process_audio():
 @app.route("/download/<filename>", methods=["GET"])
 def download_file(filename):
     try:
-        # Ваш код для скачивания файлов
-        return send_file(filename, as_attachment=True)
+        # Проверяем безопасность пути
+        if not os.path.exists(filename) or '..' in filename or '/' in filename:
+            return jsonify({"status": "error", "message": "File not found"}), 404
+        
+        return send_file(filename, as_attachment=True, download_name=f"mixed_audio_{filename.split('_')[-1]}")
+    
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 404
 
 @app.route("/api/generate", methods=["POST"])
 def generate_for_salebot():
     try:
-        # Ваш код для работы с Salebot
-        return jsonify({"status": "success", "message": "Salebot integration endpoint"})
+        # Получаем данные от Salebot
+        data = request.get_json()
+        
+        # Проверяем обязательные поля
+        if not data or 'voice_message_url' not in data:
+            return jsonify({
+                "status": "error",
+                "message": "Missing required field: voice_message_url"
+            }), 400
+        
+        client_id = data.get('client_id', 'unknown')
+        name = data.get('name', 'Guest')
+        voice_url = data['voice_message_url']
+        
+        print(f"🎵 Запрос от Salebot: client_id={client_id}, name={name}")
+        
+        # Скачиваем голосовое сообщение
+        voice_filename = f"voice_{uuid.uuid4().hex}.ogg"
+        
+        response = requests.get(voice_url)
+        if response.status_code != 200:
+            return jsonify({
+                "status": "error",
+                "message": f"Failed to download voice message: {response.status_code}"
+            }), 400
+        
+        with open(voice_filename, "wb") as f:
+            f.write(response.content)
+        
+        # Обрабатываем аудио
+        output_filename = f"mixed_{uuid.uuid4().hex}.mp3"
+        output_path = os.path.join(os.getcwd(), output_filename)
+        
+        print("🎵 Начинаем обработку аудио для Salebot...")
+        mix_voice_with_music(voice_filename, output_path, GITHUB_MUSIC_URL)
+        print("✅ Аудио обработано для Salebot!")
+        
+        # Формируем URL для скачивания
+        download_url = urljoin(request.host_url, f"download/{output_filename}")
+        
+        # Очистка временных файлов (голосового сообщения)
+        cleanup(voice_filename)
+        
+        return jsonify({
+            "status": "success",
+            "message": "Audio mixed successfully",
+            "download_url": download_url,
+            "filename": output_filename
+        })
+        
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        error_msg = f"❌ Error processing audio: {str(e)}"
+        print(error_msg)
+        return jsonify({
+            "status": "error",
+            "message": error_msg
+        }), 500
 
 # --- Инициализация приложения ---
 def create_app():
