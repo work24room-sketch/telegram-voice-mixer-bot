@@ -6,13 +6,12 @@ from flask import Flask, request, jsonify, send_file
 import telebot
 import os
 import uuid
+import time  # Добавьте этот импорт
 from audio_processor import mix_voice_with_music
 
 # --- Конфигурация ---
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 GITHUB_MUSIC_URL = "https://raw.githubusercontent.com/work24room-sketch/telegram-voice-mixer-bot/main/background_music.mp3"
-
-# ... (импорты и конфигурация остаются без изменений)
 
 # --- Инициализация Telegram бота ---
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
@@ -94,15 +93,27 @@ def index():
 
 @app.route("/process_audio", methods=["POST"])
 def process_audio():
-    # ... (код функции process_audio)
+    try:
+        # Ваш код для обработки аудио через API
+        return jsonify({"status": "success", "message": "Audio processing endpoint"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/download/<filename>", methods=["GET"])
 def download_file(filename):
-    # ... (код функции download_file)
+    try:
+        # Ваш код для скачивания файлов
+        return send_file(filename, as_attachment=True)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 404
 
 @app.route("/api/generate", methods=["POST"])
 def generate_for_salebot():
-    # ... (код функции generate_for_salebot)
+    try:
+        # Ваш код для работы с Salebot
+        return jsonify({"status": "success", "message": "Salebot integration endpoint"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # --- Инициализация приложения ---
 def create_app():
@@ -116,10 +127,9 @@ def create_app():
 # --- Точка входа для Gunicorn ---
 application = create_app()
 
-# if __name__ == "__main__":
-#     bot_thread = threading.Thread(target=run_bot)
-#     bot_thread.daemon = True
-#     bot_thread.start()
-#     print("🌐 Запускаем Flask-сервер...")
-#     app.run(host="0.0.0.0", port=5000, debug=False)
-#    app.run(host="0.0.0.0", port=5000, debug=False)
+if __name__ == "__main__":
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+    print("🌐 Запускаем Flask-сервер...")
+    app.run(host="0.0.0.0", port=5000, debug=False)
