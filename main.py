@@ -1,3 +1,6 @@
+# Добавьте этот импорт в начало файла
+import requests
+from urllib.parse import urljoin
 import threading
 from flask import Flask, request, jsonify, send_file
 import telebot
@@ -140,7 +143,83 @@ def create_app():
         print("🚀 Приложение инициализировано!")
     
     return app
+@app.route("/api/generate", methods=["POST"])
+def generate_for_salebot():
+    """
+    Эндпоинт для интеграции с Salebot.
+    Ожидает JSON: {"client_id": "123", "name": "Ivan", "voice_message_url": "https://.../voice.ogg"}
+    Возвращает JSON: {"status": "success", "client_id": "123", "name": "Ivan", "download_url": "https://.../mixed_abc123.mp3"}
+    """
+    try:
+        # 1. Получаем данные из запроса Salebot
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "No JSON data provided"}), 400
 
+        client_id = data.get("client_id")
+        name = data.get("name")
+        voice_message_url = data.get("voice_message_url")  # Новая ключевая переменная!
+
+        if not all([client_id, name, voice_message_url]):
+            return jsonify({"status": "error", "message": "Missing required fields (client_id, name, voice_message_url)"}), 400
+
+        print(f"🎯 Salebot request: client_id={client_id}, name={name}")
+
+        # 2. Скачиваем голосовое сообщение по предоставленной URL
+        voice_filename = f"voice_{uuid.uuid4().hex}.ogg"
+        print(f"📥 Downloading voice message from {voice_message_url}...")
+        
+        try:
+            response = requests.get(voice_message_url, timeout=30)
+            response.raise_for_status()  # Проверяем, что запрос успешен (status code 200)
+            
+            with open(voice_filename, 'wb') as f:
+                f.write(response.content)
+            print("✅ Voice message downloaded successfully.")
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Failed to download voice message: {str(e)}"
+            print(f"❌ {error_msg}")
+            return jsonify({"status": "error", "message": error_msg}), 400
+
+        # 3. Обрабатываем аудио (ваша существующая функция)
+        output_filename = f"mixed_{uuid.uuid4().hex}.mp3"
+        output_path = os.path.join(os.getcwd(), output_filename)
+        
+        print("🎵 Mixing audio...")
+        result_path = mix_voice_with_music(voice_filename, output_path, GITHUB_MUSIC_URL)
+        print("✅ Audio mixed successfully.")
+
+        # 4. Формируем публичную ссылку для скачивания результата
+        # Предполагаем, что ваш сервер работает на Render, и файлы раздаются из корня
+        base_url = os.environ.get('RENDER_EXTERNAL_URL', request.host_url)  # Получаем URL сервера
+        # Если используете Render, переменная RENDER_EXTERNAL_URL может быть автоматически задана
+        # request.host_url - это fallback (например, для локальной разработки)
+        
+        download_url = urljoin(base_url, f"/download/{output_filename}")
+        print(f"🔗 Generated download URL: {download_url}")
+
+        # 5. Очищаем скачанный голосовой файл (итоговый файл оставляем для скачивания)
+        cleanup(voice_filename)
+        # Файл результата НЕ удаляем сразу! Его скачает Salebot.
+        # Можно добавить отложенную задачу по очистке старых файлов.
+
+        # 6. Возвращаем успешный ответ в формате, ожидаемом Salebot
+        return jsonify({
+            "status": "success",
+            "client_id": client_id,
+            "name": name,
+            "download_url": download_url
+        })
+
+    except Exception as e:
+        error_msg = f"Internal server error: {str(e)}"
+        print(f"❌ {error_msg}")
+        # Убедитесь, что очищаем временные файлы в случае ошибки
+        if 'voice_filename' in locals() and os.path.exists(voice_filename):
+            cleanup(voice_filename)
+        if 'output_path' in locals() and os.path.exists(output_path):
+            cleanup(output_path)
+        return jsonify({"status": "error", "message": error_msg}), 500
 # --- Точка входа для Gunicorn ---
 application = create_app()
 
