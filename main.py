@@ -18,7 +18,8 @@ app = Flask(__name__)
 import time
 from flask import jsonify
 
-# Добавьте этот эндпоинт вместе с другими Flask-роутами
+# --- Эндпоинты Flask ---
+
 @app.route("/health")
 def health_check():
     """Специальный эндпоинт для проверки работоспособности UptimeRobot"""
@@ -34,10 +35,6 @@ def index():
     """Главная страница тоже подойдет для пинга"""
     return "🎵 Voice Mixer Bot is running! Use /health for status check."
 
-# --- Инициализация Telegram бота ---
-bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
-
-# --- Эндпоинты Flask ---
 @app.route("/process_audio", methods=["POST"])
 def process_audio():
     try:
@@ -67,9 +64,75 @@ def download_file(filename):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/")
-def index():
-    return "Voice Mixer Bot is running!"
+@app.route("/api/generate", methods=["POST"])
+def generate_for_salebot():
+    """
+    Эндпоинт для интеграции с Salebot.
+    Ожидает JSON: {"client_id": "123", "name": "Ivan", "voice_message_url": "https://.../voice.ogg"}
+    Возвращает JSON: {"status": "success", "client_id": "123", "name": "Ivan", "download_url": "https://.../mixed_abc123.mp3"}
+    """
+    try:
+        # 1. Получаем данные из запроса Salebot
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "No JSON data provided"}), 400
+
+        client_id = data.get("client_id")
+        name = data.get("name")
+        voice_message_url = data.get("voice_message_url")
+
+        if not all([client_id, name, voice_message_url]):
+            return jsonify({"status": "error", "message": "Missing required fields (client_id, name, voice_message_url)"}), 400
+
+        print(f"🎯 Salebot request: client_id={client_id}, name={name}")
+
+        # 2. Скачиваем голосовое сообщение
+        voice_filename = f"voice_{uuid.uuid4().hex}.ogg"
+        print(f"📥 Downloading voice message from {voice_message_url}...")
+        
+        try:
+            response = requests.get(voice_message_url, timeout=30)
+            response.raise_for_status()
+            with open(voice_filename, 'wb') as f:
+                f.write(response.content)
+            print("✅ Voice message downloaded successfully.")
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Failed to download voice message: {str(e)}"
+            print(f"❌ {error_msg}")
+            return jsonify({"status": "error", "message": error_msg}), 400
+
+        # 3. Обрабатываем аудио
+        output_filename = f"mixed_{uuid.uuid4().hex}.mp3"
+        output_path = os.path.join(os.getcwd(), output_filename)
+        
+        print("🎵 Mixing audio...")
+        result_path = mix_voice_with_music(voice_filename, output_path, GITHUB_MUSIC_URL)
+        print("✅ Audio mixed successfully.")
+
+        # 4. Формируем ссылку для скачивания
+        base_url = os.environ.get('RENDER_EXTERNAL_URL', request.host_url)
+        download_url = urljoin(base_url, f"/download/{output_filename}")
+        print(f"🔗 Generated download URL: {download_url}")
+
+        # 5. Очищаем временные файлы
+        cleanup(voice_filename)
+
+        # 6. Возвращаем ответ
+        return jsonify({
+            "status": "success",
+            "client_id": client_id,
+            "name": name,
+            "download_url": download_url
+        })
+
+    except Exception as e:
+        error_msg = f"Internal server error: {str(e)}"
+        print(f"❌ {error_msg}")
+        if 'voice_filename' in locals() and os.path.exists(voice_filename):
+            cleanup(voice_filename)
+        if 'output_path' in locals() and os.path.exists(output_path):
+            cleanup(output_path)
+        return jsonify({"status": "error", "message": error_msg}), 500
 
 # --- Обработчики Telegram ---
 @bot.message_handler(commands=['start', 'help'])
@@ -79,8 +142,8 @@ def send_welcome(message):
 @bot.message_handler(content_types=["voice"])
 def handle_voice(message):
     try:
-        print("🔊 Получено голосовое сообщение!")  # Логирование
-        bot.send_chat_action(message.client.id, "upload_audio")
+        print("🔊 Получено голосовое сообщение!")
+        bot.send_chat_action(message.chat.id, "upload_audio")
 
         # Скачиваем голосовое сообщение
         file_info = bot.get_file(message.voice.file_id)
@@ -90,7 +153,7 @@ def handle_voice(message):
         with open(voice_filename, "wb") as f:
             f.write(downloaded_file)
 
-        # Обрабатываем аудио напрямую (без HTTP запросов)
+        # Обрабатываем аудио напрямую
         output_filename = f"mixed_{uuid.uuid4().hex}.mp3"
         output_path = os.path.join(os.getcwd(), output_filename)
         
@@ -127,7 +190,7 @@ def cleanup(filename):
 def run_bot():
     print("🤖 Запускаем Telegram-бота...")
     try:
-        bot.remove_webhook()  # Важно: отключаем вебхуки если они были
+        bot.remove_webhook()
         print("✅ Бот запущен и слушает сообщения...")
         bot.polling(none_stop=True, timeout=60)
     except Exception as e:
@@ -135,7 +198,7 @@ def run_bot():
 
 # --- Инициализация приложения ---
 def create_app():
-    # Запускаем бота только при непосредственном запуске (не в Gunicorn)
+    # Запускаем бота только при непосредственном запуске
     if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
         bot_thread = threading.Thread(target=run_bot)
         bot_thread.daemon = True
@@ -143,91 +206,15 @@ def create_app():
         print("🚀 Приложение инициализировано!")
     
     return app
-@app.route("/api/generate", methods=["POST"])
-def generate_for_salebot():
-    """
-    Эндпоинт для интеграции с Salebot.
-    Ожидает JSON: {"client_id": "123", "name": "Ivan", "voice_message_url": "https://.../voice.ogg"}
-    Возвращает JSON: {"status": "success", "client_id": "123", "name": "Ivan", "download_url": "https://.../mixed_abc123.mp3"}
-    """
-    try:
-        # 1. Получаем данные из запроса Salebot
-        data = request.get_json()
-        if not data:
-            return jsonify({"status": "error", "message": "No JSON data provided"}), 400
 
-        client_id = data.get("client_id")
-        name = data.get("name")
-        voice_message_url = data.get("voice_message_url")  # Новая ключевая переменная!
-
-        if not all([client_id, name, voice_message_url]):
-            return jsonify({"status": "error", "message": "Missing required fields (client_id, name, voice_message_url)"}), 400
-
-        print(f"🎯 Salebot request: client_id={client_id}, name={name}")
-
-        # 2. Скачиваем голосовое сообщение по предоставленной URL
-        voice_filename = f"voice_{uuid.uuid4().hex}.ogg"
-        print(f"📥 Downloading voice message from {voice_message_url}...")
-        
-        try:
-            response = requests.get(voice_message_url, timeout=30)
-            response.raise_for_status()  # Проверяем, что запрос успешен (status code 200)
-            
-            with open(voice_filename, 'wb') as f:
-                f.write(response.content)
-            print("✅ Voice message downloaded successfully.")
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Failed to download voice message: {str(e)}"
-            print(f"❌ {error_msg}")
-            return jsonify({"status": "error", "message": error_msg}), 400
-
-        # 3. Обрабатываем аудио (ваша существующая функция)
-        output_filename = f"mixed_{uuid.uuid4().hex}.mp3"
-        output_path = os.path.join(os.getcwd(), output_filename)
-        
-        print("🎵 Mixing audio...")
-        result_path = mix_voice_with_music(voice_filename, output_path, GITHUB_MUSIC_URL)
-        print("✅ Audio mixed successfully.")
-
-        # 4. Формируем публичную ссылку для скачивания результата
-        # Предполагаем, что ваш сервер работает на Render, и файлы раздаются из корня
-        base_url = os.environ.get('RENDER_EXTERNAL_URL', request.host_url)  # Получаем URL сервера
-        # Если используете Render, переменная RENDER_EXTERNAL_URL может быть автоматически задана
-        # request.host_url - это fallback (например, для локальной разработки)
-        
-        download_url = urljoin(base_url, f"/download/{output_filename}")
-        print(f"🔗 Generated download URL: {download_url}")
-
-        # 5. Очищаем скачанный голосовой файл (итоговый файл оставляем для скачивания)
-        cleanup(voice_filename)
-        # Файл результата НЕ удаляем сразу! Его скачает Salebot.
-        # Можно добавить отложенную задачу по очистке старых файлов.
-
-        # 6. Возвращаем успешный ответ в формате, ожидаемом Salebot
-        return jsonify({
-            "status": "success",
-            "client_id": client_id,
-            "name": name,
-            "download_url": download_url
-        })
-
-    except Exception as e:
-        error_msg = f"Internal server error: {str(e)}"
-        print(f"❌ {error_msg}")
-        # Убедитесь, что очищаем временные файлы в случае ошибки
-        if 'voice_filename' in locals() and os.path.exists(voice_filename):
-            cleanup(voice_filename)
-        if 'output_path' in locals() and os.path.exists(output_path):
-            cleanup(output_path)
-        return jsonify({"status": "error", "message": error_msg}), 500
 # --- Точка входа для Gunicorn ---
 application = create_app()
 
 # if __name__ == "__main__":
-    # Для локального запуска
-   # bot_thread = threading.Thread(target=run_bot)
-   # bot_thread.daemon = True
-   # bot_thread.start()
-    
-    print("🌐 Запускаем Flask-сервер...")
-   # app.run(host="0.0.0.0", port=5000, debug=False)
+#     Для локального запуска
+#    bot_thread = threading.Thread(target=run_bot)
+#    bot_thread.daemon = True
+#    bot_thread.start()
+#    
+#    print("🌐 Запускаем Flask-сервер...")
+#    app.run(host="0.0.0.0", port=5000, debug=False)
