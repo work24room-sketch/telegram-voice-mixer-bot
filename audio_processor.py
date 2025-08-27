@@ -1,66 +1,75 @@
 import os
 import requests
-import subprocess
-import tempfile
+from pydub import AudioSegment
+from pydub.utils import which
+
+# Указываем путь к ffmpeg (важно для Render)
+AudioSegment.converter = which("ffmpeg")
+
+def download_background_music(github_raw_url, local_filename):
+    """Скачивает фоновую музыку из GitHub"""
+    response = requests.get(github_raw_url)
+    response.raise_for_status()  # Проверяем на ошибки
+    with open(local_filename, 'wb') as f:
+        f.write(response.content)
+    return AudioSegment.from_file(local_filename, format="mp3")
 
 def mix_voice_with_music(voice_file_path, output_path, github_music_url):
     """
-    Микширование голосового и фоновой музыки через ffmpeg (без pydub)
+    Основная функция обработки:
+    1. Загружает голосовое сообщение
+    2. Загружает фоновую музыку
+    3. Подрезает музыку под длину голоса + паузы
+    4. Добавляет fade in и fade out
+    5. Миксует и экспортирует результат
     """
 
-    # Параметры
-    start_pause = 1.0     # пауза в начале (сек)
-    end_pause = 2.0       # пауза в конце (сек)
-    fade_duration = 1.5   # затухание музыки (сек)
-    music_volume = 0.3    # громкость музыки (30%)
+    # Параметры (можно вынести в конфиг)
+    start_pause_ms = 1000  # Пауза в начале (1 секунда)
+    end_pause_ms = 2000    # Пауза в конце (2 секунды)
+    fade_duration_ms = 1500 # Длительность затухания (1.5 секунды)
 
-    # Скачиваем фоновую музыку
-    response = requests.get(github_music_url)
-    response.raise_for_status()
+    # Загружаем голосовое сообщение
+    voice_audio = AudioSegment.from_file(voice_file_path)
+    voice_duration = len(voice_audio)
 
-    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as music_file:
-        music_file.write(response.content)
-        music_path = music_file.name
+    # Скачиваем и загружаем фоновую музыку
+    bg_music_file = "background_music.mp3"
+    bg_music = download_background_music(github_music_url, bg_music_file)
 
-    try:
-        # Получаем длительность голосового
-        result = subprocess.run([
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            voice_file_path
-        ], capture_output=True, text=True, check=True)
+    # Рассчитываем необходимую длину музыки: голос + паузы
+    required_music_length = voice_duration + start_pause_ms + end_pause_ms
 
-        voice_duration = float(result.stdout.strip())
-        total_duration = voice_duration + start_pause + end_pause
+    # Если музыка короче, чем нужно, зацикливаем ее.
+    # Если длиннее - обрезаем.
+    if len(bg_music) < required_music_length:
+        # Считаем, сколько раз нужно повторить трек
+        num_loops = (required_music_length // len(bg_music)) + 1
+        bg_music = bg_music * num_loops
 
-        # Формируем команду ffmpeg
-        command = [
-            "ffmpeg",
-            "-y",
-            "-i", voice_file_path,
-            "-i", music_path,
-            "-filter_complex",
-            # 0:a → voice, 1:a → music
-            f"[0:a]adelay={int(start_pause*1000)}|{int(start_pause*1000)},"
-            f"apad=pad_dur={end_pause},"
-            f"aformat=channel_layouts=stereo:sample_rates=44100[voice];"
-            f"[1:a]volume={music_volume},aloop=loop=-1:size=2e+09,"
-            f"atrim=0:{total_duration},"
-            f"afade=t=in:st=0:d={fade_duration},"
-            f"afade=t=out:st={total_duration-fade_duration}:d={fade_duration},"
-            f"aformat=channel_layouts=stereo:sample_rates=44100[music];"
-            f"[voice][music]amix=inputs=2:duration=longest[final]",
-            "-map", "[final]",
-            "-ac", "2",
-            "-ar", "44100",
-            output_path
-        ]
+    # Обрезаем музыку до нужной длины
+    bg_music = bg_music[:required_music_length]
 
-        subprocess.run(command, check=True)
+    # Применяем fade in к началу и fade out к концу музыки
+    bg_music = bg_music.fade_in(fade_duration_ms).fade_out(fade_duration_ms)
 
-        return output_path
+    # Создаем аудиодорожку с паузами
+    # 1. Пауза в начале
+    final_track = AudioSegment.silent(duration=start_pause_ms)
+    # 2. Добавляем голос поверх тишины (пауза уже есть)
+    final_track = final_track.overlay(voice_audio, position=start_pause_ms)
+    # 3. Добавляем паузу в конце (путем расширения дорожки)
+    final_track = final_track + AudioSegment.silent(duration=end_pause_ms)
 
-    finally:
-        if os.path.exists(music_path):
-            os.remove(music_path)
+    # Накладываем подготовленную музыку на финальную дорожку (голос + паузы)
+    # Уровень громкости музыки можно регулировать (например, -10 dB)
+    mixed = final_track.overlay(bg_music, gain_during_overlay=-10)
+
+    # Экспортируем результат
+    mixed.export(output_path, format="mp3")
+
+    # Удаляем временный файл музыки (опционально)
+    if os.path.exists(bg_music_file):
+        os.remove(bg_music_file)
+
+    return output_path
