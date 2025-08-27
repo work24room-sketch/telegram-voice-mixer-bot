@@ -1,5 +1,6 @@
 # Добавьте этот импорт в начало файла
 import os
+import telebot
 import logging
 from logging.handlers import RotatingFileHandler
 import sys
