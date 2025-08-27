@@ -1,6 +1,8 @@
 # Добавьте этот импорт в начало файла
 import os
 import telebot
+from flask import Flask, request, jsonify
+import requests
 import logging
 from logging.handlers import RotatingFileHandler
 import sys
