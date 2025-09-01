@@ -43,6 +43,12 @@ def mix_voice_with_music(voice_file_path, output_path, github_music_url):
     with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_music:
         bg_music_file = temp_music.name
 
+    processed_music_file = None
+    faded_music_file = None
+    silence_start_file = None
+    silence_end_file = None
+    final_track_file = None
+
     try:
         # Скачиваем фоновую музыку
         download_background_music(github_music_url, bg_music_file)
@@ -63,7 +69,7 @@ def mix_voice_with_music(voice_file_path, output_path, github_music_url):
         # Обрабатываем музыку: зацикливаем, обрезаем, добавляем fade
         if music_duration < required_music_length:
             # Зацикливаем музыку
-            loop_count = (required_music_length // music_duration) + 2  # +2 для запаса
+            loop_count = (required_music_length // music_duration) + 2
             cmd_loop = [
                 'ffmpeg', '-y',
                 '-stream_loop', str(loop_count),
@@ -72,7 +78,7 @@ def mix_voice_with_music(voice_file_path, output_path, github_music_url):
                 '-t', f'{required_music_length / 1000:.2f}',
                 processed_music_file
             ]
-            subprocess.run(cmd_loop, check=True)
+            subprocess.run(cmd_loop, check=True, capture_output=True)
         else:
             # Просто копируем и обрезаем
             cmd_trim = [
@@ -81,7 +87,7 @@ def mix_voice_with_music(voice_file_path, output_path, github_music_url):
                 '-t', f'{required_music_length / 1000:.2f}',
                 processed_music_file
             ]
-            subprocess.run(cmd_trim, check=True)
+            subprocess.run(cmd_trim, check=True, capture_output=True)
 
         # Добавляем fade in и fade out к музыке
         with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_faded_music:
@@ -94,19 +100,31 @@ def mix_voice_with_music(voice_file_path, output_path, github_music_url):
                    f'afade=t=out:st={(required_music_length - fade_duration_ms)/1000:.2f}:d={fade_duration_ms/1000:.2f}',
             faded_music_file
         ]
-        subprocess.run(cmd_fade, check=True)
+        subprocess.run(cmd_fade, check=True, capture_output=True)
 
         # Создаем паузу в начале
-        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_silence:
-            silence_file = temp_silence.name
+        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_silence_start:
+            silence_start_file = temp_silence_start.name
 
-        cmd_silence = [
+        cmd_silence_start = [
             'ffmpeg', '-y',
             '-f', 'lavfi',
             '-i', f'anullsrc=r=44100:cl=stereo:d={start_pause_ms/1000:.2f}',
-            silence_file
+            silence_start_file
         ]
-        subprocess.run(cmd_silence, check=True)
+        subprocess.run(cmd_silence_start, check=True, capture_output=True)
+
+        # Создаем паузу в конце
+        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_silence_end:
+            silence_end_file = temp_silence_end.name
+
+        cmd_silence_end = [
+            'ffmpeg', '-y',
+            '-f', 'lavfi',
+            '-i', f'anullsrc=r=44100:cl=stereo:d={end_pause_ms/1000:.2f}',
+            silence_end_file
+        ]
+        subprocess.run(cmd_silence_end, check=True, capture_output=True)
 
         # Создаем финальную дорожку с паузами
         with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_final_track:
@@ -115,13 +133,13 @@ def mix_voice_with_music(voice_file_path, output_path, github_music_url):
         # Объединяем паузу + голос + паузу в конце
         cmd_concat = [
             'ffmpeg', '-y',
-            '-i', silence_file,
+            '-i', silence_start_file,
             '-i', voice_file_path,
-            '-i', f'anullsrc=r=44100:cl=stereo:d={end_pause_ms/1000:.2f}',
+            '-i', silence_end_file,
             '-filter_complex', '[0:a][1:a][2:a]concat=n=3:v=0:a=1',
             final_track_file
         ]
-        subprocess.run(cmd_concat, check=True)
+        subprocess.run(cmd_concat, check=True, capture_output=True)
 
         # Микшируем голос с музыкой
         cmd_mix = [
@@ -134,13 +152,27 @@ def mix_voice_with_music(voice_file_path, output_path, github_music_url):
             f'[voice][music]amix=inputs=2:duration=first:dropout_transition=2',
             output_path
         ]
-        subprocess.run(cmd_mix, check=True)
+        result = subprocess.run(cmd_mix, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"FFmpeg error: {result.stderr}")
+            raise subprocess.CalledProcessError(result.returncode, cmd_mix)
 
+    except subprocess.CalledProcessError as e:
+        print(f"Error in audio processing: {e}")
+        if hasattr(e, 'stderr') and e.stderr:
+            print(f"FFmpeg stderr: {e.stderr}")
+        raise
     finally:
         # Очищаем временные файлы
-        for temp_file in [bg_music_file, processed_music_file, faded_music_file, 
-                         silence_file, final_track_file]:
+        temp_files = [
+            bg_music_file, processed_music_file, faded_music_file,
+            silence_start_file, silence_end_file, final_track_file
+        ]
+        for temp_file in temp_files:
             if temp_file and os.path.exists(temp_file):
-                os.remove(temp_file)
+                try:
+                    os.remove(temp_file)
+                except:
+                    pass
 
     return output_path
